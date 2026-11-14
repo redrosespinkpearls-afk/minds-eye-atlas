@@ -1,3 +1,11 @@
+# Mind's Eye Atlas — Ready to publish
+
+**[Deploy this test to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/redrosespinkpearls-afk/minds-eye-atlas)**
+
+This button opens Cloudflare's deployment wizard, creates the D1 database, and publishes the assessment after you authorize Cloudflare. The deployment may create a separate GitHub repository under your account.
+
+---
+
 # Mind's Eye Atlas — Cloudflare edition (v2.1)
 
 A mobile-friendly, 27-question visual imagery and cognitive-processing self-assessment. It includes 12 scene prompts with **two specific visual-description choices each**, 15 automatically scored spatial/memory/reasoning tasks, hidden active-question timers, personal explanations, research links, and a five-color collective results dashboard.
@@ -10,7 +18,7 @@ A mobile-friendly, 27-question visual imagery and cognitive-processing self-asse
 
 Cloudflare's official **Deploy to Cloudflare** button can provision the Worker and its D1 database automatically from a **public GitHub/GitLab repository**. This package is ready to be used as the root of such a repository. After the repository is published, open:
 
-`https://deploy.workers.cloudflare.com/?url=https://github.com/YOUR_USERNAME/YOUR_REPOSITORY`
+`https://deploy.workers.cloudflare.com/?url=https://github.com/redrosespinkpearls-afk/minds-eye-atlas`
 
 Sign in to Cloudflare/GitHub, accept the default resources/build configuration, and deploy. The `deploy` command already applies the D1 migration. Cloudflare's button only supports **public Git repositories**; the ZIP file itself is not yet a one-click deployment link. Do not publish participant data or personal secrets in that repository. No secrets are included in this package.
 
