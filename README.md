@@ -1,82 +1,64 @@
-# Mind's Eye Atlas — Ready to publish
+# Mind's Eye Atlas — Cloudflare edition
 
-**[Deploy this test to Cloudflare](https://deploy.workers.cloudflare.com/?url=https://github.com/redrosespinkpearls-afk/minds-eye-atlas)**
+A privacy-first 27-question interactive mental imagery and cognitive-processing assessment.
 
-This button opens Cloudflare's deployment wizard, creates the D1 database, and publishes the assessment after you authorize Cloudflare. The deployment may create a separate GitHub repository under your account.
+## Deploy from GitHub
 
----
+Source: https://github.com/redrosespinkpearls-afk/minds-eye-atlas
 
-# Mind's Eye Atlas — Cloudflare edition (v2.1)
+Cloudflare Deploy link:
 
-A mobile-friendly, 27-question visual imagery and cognitive-processing self-assessment. It includes 12 scene prompts with **two specific visual-description choices each**, 15 automatically scored spatial/memory/reasoning tasks, hidden active-question timers, personal explanations, research links, and a five-color collective results dashboard.
+https://deploy.workers.cloudflare.com/?url=https://github.com/redrosespinkpearls-afk/minds-eye-atlas
 
-**Not a diagnostic instrument or IQ test.** Imagery has no objective correct response; self-report cannot establish honesty. The custom levels are not validated medical thresholds. Task timing uses demonstration-only reference windows, not population norms.
+**Important:** In Cloudflare's Workers & Pages project, the deployment command can remain `npx wrangler deploy`. The application now uses a SQLite-backed Durable Object, which Cloudflare provisions during deployment. No D1 database ID, separate database creation, or migration command is required.
 
-## Fastest publishing options
+### If an earlier build failed with Cloudflare error 10181
 
-### A. In a browser (recommended if you use Android)
+The former configuration referenced a placeholder D1 database ID. That configuration has been removed. In Cloudflare, open **Workers & Pages → minds-eye-atlas → Deployments → Retry deployment** (or use the new-deployment flow). Make sure it pulls the latest GitHub commit and does **not** lock to the old failing commit.
 
-Cloudflare's official **Deploy to Cloudflare** button can provision the Worker and its D1 database automatically from a **public GitHub/GitLab repository**. This package is ready to be used as the root of such a repository. After the repository is published, open:
+If your Cloudflare project was imported into an automatically generated fork, it may be tracking that separate fork rather than `redrosespinkpearls-afk/minds-eye-atlas`. In that case, reconnect this original GitHub repository or use the Cloudflare Deploy link above to create a new Worker from the updated version.
 
-`https://deploy.workers.cloudflare.com/?url=https://github.com/redrosespinkpearls-afk/minds-eye-atlas`
-
-Sign in to Cloudflare/GitHub, accept the default resources/build configuration, and deploy. The `deploy` command already applies the D1 migration. Cloudflare's button only supports **public Git repositories**; the ZIP file itself is not yet a one-click deployment link. Do not publish participant data or personal secrets in that repository. No secrets are included in this package.
-
-Official explanation: https://developers.cloudflare.com/workers/platform/deploy-buttons/
-
-### B. From a Windows/Mac/Linux PC with Node.js installed
-
-1. Unzip this package, open a terminal **inside** the `Minds_Eye_Atlas_Cloudflare` folder.
-2. Run:
+### Local development (optional)
 
 ```bash
 npm install
-npm run publish
+npm run dev
 ```
 
-3. When Cloudflare requests authentication, sign in and authorize deployment. The script finds or creates your D1 database, applies the schema, deploys the site, and prints the public `workers.dev` link.
+To deploy with a locally authorized Cloudflare account: `npm run deploy`.
 
-**Subsequent updates:** `npm run deploy` (keeps the same database).
+## Architecture
 
-**Local developer preview:** `npm install && npm run dev`; this uses a local D1 database, not the production data.
+- `public/index.html`: accessible mobile-first assessment UI
+- `public/app.js`: imagery prompts, specific detail responses, memory and reasoning challenges, personal interpretation and collective chart
+- `public/privacy.html`: participant privacy notice
+- `src/index.js`: Worker API and the `AtlasStore` Durable Object class
+- `wrangler.jsonc`: Cloudflare assets and SQLite Durable Object configuration
 
-## Data handling and participant privacy
+Cloudflare automatically creates the Durable Object namespace using `new_sqlite_classes` with tag `v1`. The object initializes its private SQLite tables when first used. A single named object stores the collective statistics and consenting participant summaries, so all devices query the same dataset.
 
-- No account, email address, advertising trackers, or analytics SDK are built into this test.
-- Taking the assessment does not upload responses. A completed test is scored in the browser for private viewing first.
-- **Optional consent** sends answer arrays and active-response timing over HTTPS to the Worker, so the Worker can check and recompute scores. Those arrays are *not saved* in D1 or included in application logs.
-- D1 stores only the scored summary, its research-category index, strategy, timestamp, deletion-token hash, and **optional** public-list name.
-- Everyone who consents contributes to aggregate five-color percentages.
-- The separate **individual-result listing** checkbox is off by default. Only opted-in entries appear publicly; an optional nickname is stored only for a public entry.
-- Participants can copy a private recovery code to delete a submission. The code is never stored in plaintext server-side. Keep it safe because clearing the browser may lose its local copy.
-- Cloudflare processes request metadata under its own privacy and security terms. No application can guarantee zero provider access or perfect anonymity. D1 is private to the account controlling the Worker.
-- Public survey percentages reflect *self-selected participants*, not population prevalence; duplicates and automated submissions cannot be fully ruled out without stronger anti-abuse controls.
-- No medical claims are made and no clinical assessment should be inferred from challenge performance or response times.
+## Privacy
 
-## Website / API
+- Taking the assessment does not automatically publish a score.
+- People explicitly opt in to contribute to aggregate percentages.
+- An additional checkbox controls whether an individual's summary and optional name appear in the public list.
+- The browser sends answers and response times to the Worker solely to verify scores. The application does not store those raw arrays.
+- Only summary scores, imagery category, optional display name, and a hashed deletion recovery token are stored.
+- Participants can request deletion using their recovery code.
+- Cloudflare may process hosting and network metadata, as with any online service.
 
-- `GET /` — full assessment
-- `GET /api/status` — live connection indicator
-- `GET /api/stats` — aggregated category and domain statistics
-- `GET /api/entries` — paginated **opted-in** individual summaries only
-- `POST /api/submit` — validates questions, recomputes scores, saves **summary only**
-- `POST /api/delete` — requires private recovery code; deletes saved summary
+## Medical and research limitations
 
-All queries use D1 prepared statements. Responses include no-cache headers. The site uses same-origin API requests and restrictive browser security headers. Raw question data and deletion secrets are never placed in the public asset directory.
+This assessment is educational and exploratory, not a diagnosis, IQ test, or standardized timing benchmark. Its five imagery bands are descriptions based on custom self-ratings and should never be treated as validated medical thresholds. Its collective sample is voluntary and cannot estimate population prevalence.
 
-## Project layout
+## API
 
-```text
-public/index.html   Responsive visual shell
-public/app.js       Full questionnaire, timing, charts and personal explanations
-src/index.js       Scoring validator and Cloudflare Worker API
-migrations/        Private D1 database schema
-scripts/publish.mjs One-command local deployment helper
-wrangler.jsonc      Cloudflare configuration + D1 binding
-```
+- `GET /api/status`: confirms storage is available
+- `GET /api/stats`: aggregate distribution, total count, and domain means
+- `GET /api/entries`: individually published results only, paginated
+- `POST /api/submit`: validates and recomputes a consented result
+- `POST /api/delete`: removes a result using its deletion recovery code
 
-## Testing and production checklist
+## Testing
 
-Run `npm test` for scoring and API tests. Run `npm run check` for syntax checks. Before sharing your public link, complete a test, check that the private results appear before the collective chart, verify anonymous and named submissions, confirm a result can be deleted, and test a second device. Make sure Cloudflare's deployment logs show that the database migration completed.
-
-**Important:** This package has been built and locally tested; no live Cloudflare deployment exists until you authorize a deployment to your account. Google Sheets are not connected to this version.
+Run `npm run check` to check JavaScript syntax. The public deployment should return `{"online":true}` from `/api/status` after the SQLite Durable Object initializes. Verify aggregate count and deletion behavior with test submissions before inviting the public.
