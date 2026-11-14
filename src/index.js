@@ -1,3 +1,4 @@
+import { DurableObject } from 'cloudflare:workers';
 /** Mind's Eye Atlas — privacy-first scoring API for Cloudflare Workers + D1.
  * Raw answers and timers are processed in memory and never stored in D1.
  */
@@ -5,7 +6,7 @@ const CORRECT=[2,0,2,0,0,2,1,0,0,0,1,0,1,2,0];
 const LEVEL=[1,2,3,4,5,1,2,3,4,5,1,2,3,4,5];
 const TARGET=[18,30,45,75,110,15,18,25,40,55,18,25,35,50,75];
 const STRATEGIES=new Set(['words or logical rules','nonvisual spatial awareness','actual mental pictures','a mixture of strategies','unsure']);
-const STATUS={version:2,online:true,storage:'Cloudflare D1',privacy:'Only consented summaries are retained; raw answers and timing arrays are not stored.'};
+const STATUS={version:2,online:true,storage:'Cloudflare SQLite Durable Object',privacy:'Only consented summaries are retained; raw answers and timing arrays are not stored.'};
 function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});}
 const bad=(error,status=400)=>json({ok:false,error},status);
 const valid=(a,n,max)=>Array.isArray(a)&&a.length===n&&a.every(v=>Number.isInteger(v)&&v>=0&&v<=max);
@@ -84,19 +85,84 @@ function secure(resp){
   h.set('content-security-policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   return new Response(resp.body,{status:resp.status,statusText:resp.statusText,headers:h});
 }
+
+/**
+ * A single SQLite-backed Durable Object stores consented summaries.
+ * Its namespace is provisioned automatically with the Worker; no D1 ID is needed.
+ * Database schema is created on first access, so deployment needs no migrations.
+ */
+export class AtlasStore extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+    this.sql.exec(
+      "CREATE TABLE IF NOT EXISTS responses ("+
+      "seq INTEGER PRIMARY KEY AUTOINCREMENT,"+
+      "id TEXT NOT NULL UNIQUE,"+
+      "created_at TEXT NOT NULL,"+
+      "assessment_version INTEGER NOT NULL CHECK (assessment_version = 2),"+
+      "public_entry INTEGER NOT NULL DEFAULT 0 CHECK (public_entry IN (0,1)),"+
+      "display_name TEXT,"+
+      "imagery_score INTEGER NOT NULL CHECK (imagery_score BETWEEN 0 AND 48),"+
+      "detail_score INTEGER NOT NULL CHECK (detail_score BETWEEN 0 AND 48),"+
+      "category INTEGER NOT NULL CHECK (category BETWEEN 0 AND 4),"+
+      "total_correct INTEGER NOT NULL CHECK (total_correct BETWEEN 0 AND 15),"+
+      "difficulty_score INTEGER NOT NULL CHECK (difficulty_score BETWEEN 0 AND 45),"+
+      "timed_score REAL NOT NULL CHECK (timed_score BETWEEN 0 AND 45),"+
+      "spatial INTEGER NOT NULL CHECK (spatial BETWEEN 0 AND 5),"+
+      "memory INTEGER NOT NULL CHECK (memory BETWEEN 0 AND 5),"+
+      "reasoning INTEGER NOT NULL CHECK (reasoning BETWEEN 0 AND 5),"+
+      "strategy TEXT NOT NULL,"+
+      "deletion_hash TEXT NOT NULL)"
+    );
+    this.sql.exec("CREATE INDEX IF NOT EXISTS responses_public_seq_idx ON responses(public_entry, seq DESC)");
+    this.sql.exec("CREATE INDEX IF NOT EXISTS responses_category_idx ON responses(category)");
+    const sql=this.sql;
+    this.db={
+      prepare(query) {
+        let params=[];
+        const statement={
+          bind(...values){params=values;return statement;},
+          async first(){return sql.exec(query,...params).toArray()[0]??null;},
+          async all(){return {results:sql.exec(query,...params).toArray()};},
+          async run(){
+            sql.exec(query,...params);
+            return {meta:{changes:Number(sql.exec("SELECT changes() AS n").one().n)}};
+          }
+        };
+        return statement;
+      }
+    };
+  }
+  async fetch(request) {
+    const url=new URL(request.url),path=url.pathname;
+    const db=this.db;
+    try {
+      if(request.method==='GET'&&path==='/api/status'){
+        await db.prepare('SELECT COUNT(*) AS c FROM responses').first();
+        return json({...STATUS,url:url.origin});
+      }
+      if(request.method==='GET'&&path==='/api/stats')return json(await stats(db));
+      if(request.method==='GET'&&path==='/api/entries')return await entries(db,url);
+      if(request.method==='POST'&&path==='/api/submit')return await submit(db,request);
+      if(request.method==='POST'&&path==='/api/delete')return await remove(db,request);
+      return bad('Endpoint not found.',404);
+    } catch(e) {
+      return bad('Results service temporarily unavailable.',503);
+    }
+  }
+}
 export default {
  async fetch(request,env){
-  const url=new URL(request.url),path=url.pathname;
-  if(path.startsWith('/api/')){
-   if(!env.DB)return bad('Database binding missing.',503);
-   try{
-    if(request.method==='GET'&&path==='/api/status'){await env.DB.prepare('SELECT COUNT(*) AS c FROM responses').first();return json({...STATUS,url:url.origin});}
-    if(request.method==='GET'&&path==='/api/stats')return json(await stats(env.DB));
-    if(request.method==='GET'&&path==='/api/entries')return entries(env.DB,url);
-    if(request.method==='POST'&&path==='/api/submit')return submit(env.DB,request);
-    if(request.method==='POST'&&path==='/api/delete')return remove(env.DB,request);
-    return bad('Endpoint not found.',404);
-   }catch{return bad('Service temporarily unavailable.',503);}
+  const url=new URL(request.url);
+  if(url.pathname.startsWith('/api/')){
+   if(!env.STORE)return bad('Results store binding unavailable.',503);
+   try {
+    const store=env.STORE.getByName('mindseye-collective-v2');
+    return await store.fetch(request);
+   } catch {
+    return bad('Results service temporarily unavailable.',503);
+   }
   }
   return secure(await env.ASSETS.fetch(request));
  }
