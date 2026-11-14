@@ -10,12 +10,20 @@
       "/api/*"
     ]
   },
-  "d1_databases": [
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "STORE",
+        "class_name": "AtlasStore"
+      }
+    ]
+  },
+  "migrations": [
     {
-      "binding": "DB",
-      "database_name": "mindseye-atlas-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "./migrations"
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "AtlasStore"
+      ]
     }
   ]
 }
