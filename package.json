@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Privacy-first interactive imagery assessment with optional collective statistics",
   "scripts": {
-    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
-    "dev": "wrangler d1 migrations apply DB --local && wrangler dev",
-    "check": "node --check src/index.js && node --check public/app.js"
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "check": "node --check src/index.js && node --check public/app.js",
+    "publish": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.102.0"
