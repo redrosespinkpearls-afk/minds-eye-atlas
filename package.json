@@ -1,0 +1,15 @@
+{
+  "name": "minds-eye-atlas-cloudflare",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Privacy-first interactive imagery assessment with optional collective statistics",
+  "scripts": {
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "dev": "wrangler d1 migrations apply DB --local && wrangler dev",
+    "check": "node --check src/index.js && node --check public/app.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.102.0"
+  }
+}
